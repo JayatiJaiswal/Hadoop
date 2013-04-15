@@ -1,0 +1,260 @@
+#################################################
+#### Generating SSH Key Pair on Master node #####
+#################################################
+$ ssh-keygen -t rsa
+$ chmod 700 ~/.ssh
+$ cp ~/.ssh/id_rsa.pub ~/.ssh/authorized_keys
+$ chmod 600 ~/.ssh/authorized_keys
+$ ssh localhost
+
+Now you can ssh localhost without any prompt
+
+########################
+#### For Slave node ####
+########################
+
+$ scp ~/.ssh/id_rsa.pub hduser@172.16.63.157:~/master_key
+$ ssh 172.16.63.157
+$ mkdir ~/.ssh
+$ chmod 700 ~/.ssh
+$ mv ~/master_key ~/.ssh/authorized_keys
+$ chmod 600 ~/.ssh/authorized_keys
+
+#Now, from the master node, try to ssh slave node
+$ ssh 172.16.63.156
+$ ssh 172.16.63.157
+
+########################################
+#### Changing Hostnames permanently ####
+########################################
+
+$ sudo nano /etc/sysconfig/network
+
+Change the 3rd line to the hostname you need to set. Set the name of master node as "master" and the slave node as "slave1"
+
+Now, add the names to /etc/hosts file
+
+$ sudo vi /etc/hosts
+
+Add the following lines to the file:
+172.16.63.156 master
+172.16.63.157 slave1
+
+Do the same changes to the hosts file in the slave node.
+
+#######################################
+#### Install daemons in slave node ####
+#######################################
+
+In the slave node, follow the steps:
+
+$ sudo yum install hadoop-0.20 hadoop-0.20-native
+
+$ sudo yum install hadoop-0.20-tasktracker
+$ sudo yum install hadoop-0.20-datanode
+
+#######################
+#### Configuration ####
+#######################
+
+# Go to the master node.
+
+$ ssh master
+
+# Copy the default configuration to your custom directory. 
+
+$ sudo cp -r  /etc/hadoop-0.20/conf.empty /etc/hadoop-0.20/conf.my_cluster
+
+# You can call this configuration anything you like; in this example, it's called my_cluster.
+
+# Activate this new configuration by informing alternatives this configuration is a higher priority than the others (such as 50): 
+
+# To activate the new configuration On Red Hat-compatible systems:
+
+$ sudo alternatives --install /etc/hadoop-0.20/conf hadoop-0.20-conf /etc/hadoop-0.20/conf.my_cluster 50
+
+# If an error comes up like: alternatives: command not found, then use the fix:
+$ export PATH=$PATH:/sbin:/usr/sbin:/usr/local/sbin
+
+$ cd /etc/hadoop-0.20/conf.my_cluster
+$ sudo nano hdfs-site.xml
+
+# Within the <configuration> </configuration> tags, add the lines:
+
+<property>
+ <name>dfs.name.dir</name>
+ <value>/data/1/dfs/nn,/nfsmount/dfs/nn</value>
+</property>
+<property>
+ <name>dfs.data.dir</name>
+ <value>/data/1/dfs/dn,/data/2/dfs/dn,/data/3/dfs/dn</value>
+</property>
+<property>
+  <name>dfs.replication</name>
+  <value>1</value>
+  <description>Default block replication.
+  The actual number of replications can be specified when the file is
+created.
+  The default is used if replication is not specified in create time.
+  </description>
+</property>
+
+$ sudo nano mapred-site.xml
+
+<property>
+ <name>mapred.local.dir</name>
+ <value>/data/1/mapred/local,/data/2/mapred/local,/data/3/mapred/local</value>
+</property>
+
+# Create the dfs.name.dir local directories:
+$ sudo mkdir -p /data/1/dfs/nn /nfsmount/dfs/nn
+
+# Create the dfs.data.dir local directories:
+$ sudo mkdir -p /data/1/dfs/dn /data/2/dfs/dn /data/3/dfs/dn /data/4/dfs/dn
+
+# Create the mapred.local.dir local directories:
+$ sudo mkdir -p /data/1/mapred/local /data/2/mapred/local /data/3/mapred/local /data/4/mapred/local
+
+# Configure the owner of the dfs.name.dir and dfs.data.dir directories to be the hdfs user:
+$ sudo chown -R hdfs:hadoop /data/1/dfs/nn /nfsmount/dfs/nn /data/1/dfs/dn /data/2/dfs/dn /data/3/dfs/dn /data/4/dfs/dn
+
+# Configure the owner of the mapred.local.dir directory to be the mapred user:
+$ sudo chown -R mapred:hadoop /data/1/mapred/local /data/2/mapred/local /data/3/mapred/local /data/4/mapred/local
+
+$ sudo chmod 700 /data/1/dfs/nn /nfsmount/dfs/nn
+
+####################################################################
+#### To deploy your custom configuration to your entire cluster ####
+####################################################################
+
+# Push the /etc/hadoop-0.20/conf.my_cluster directory to all nodes in your cluster. 
+
+$ sudo scp -r /etc/hadoop-0.20/conf.my_cluster hduser@slave1:/home/hduser/hadoop_configuration
+
+# Move it to /etc/hadoop-0.20 folder.
+
+# Set alternative rules on all nodes to activate your configuration. 
+
+$ sudo alternatives --install /etc/hadoop-0.20/conf hadoop-0.20-conf /etc/hadoop-0.20/conf.my_cluster 50
+
+# Create the dfs.name.dir local directories:
+$ sudo mkdir -p /data/1/dfs/nn /nfsmount/dfs/nn
+
+# Create the dfs.data.dir local directories:
+$ sudo mkdir -p /data/1/dfs/dn /data/2/dfs/dn /data/3/dfs/dn /data/4/dfs/dn
+
+# Create the mapred.local.dir local directories:
+$ sudo mkdir -p /data/1/mapred/local /data/2/mapred/local /data/3/mapred/local /data/4/mapred/local
+
+# Configure the owner of the dfs.name.dir and dfs.data.dir directories to be the hdfs user:
+$ sudo chown -R hdfs:hadoop /data/1/dfs/nn /nfsmount/dfs/nn /data/1/dfs/dn /data/2/dfs/dn /data/3/dfs/dn /data/4/dfs/dn
+
+# Configure the owner of the mapred.local.dir directory to be the mapred user:
+$ sudo chown -R mapred:hadoop /data/1/mapred/local /data/2/mapred/local /data/3/mapred/local /data/4/mapred/local
+
+$ sudo chmod 700 /data/1/dfs/nn /nfsmount/dfs/nn
+
+
+# If an error comes up like: alternatives: command not found, then use the fix:
+$ export PATH=$PATH:/sbin:/usr/sbin:/usr/local/sbin
+
+
+Restart the daemons on all nodes in your cluster using the service scripts so that the new configuration files are read.
+
+
+# Now, go to the master node
+$ ssh master
+
+$ cd /etc/hadoop-0.20/conf.my_cluster
+$ sudo nano masters
+
+# Give the content as
+master
+# and save the file
+
+$ sudo nano slaves
+
+# Give the content as
+master
+slave
+# and save the file
+
+$ sudo nano core-site.xml
+
+<!-- In: conf/core-site.xml -->
+<property>
+  <name>fs.default.name</name>
+  <value>hdfs://master:54310</value>
+  <description>The name of the default file system.  A URI whose
+  scheme and authority determine the FileSystem implementation.  The
+  uri's scheme determines the config property (fs.SCHEME.impl) naming
+  the FileSystem implementation class.  The uri's authority is used to
+  determine the host, port, etc. for a filesystem.</description>
+</property>
+
+$ sudo nano mapred-site.xml
+
+<!-- In: conf/mapred-site.xml -->
+<property>
+  <name>mapred.job.tracker</name>
+  <value>master:54311</value>
+  <description>The host and port that the MapReduce job tracker runs
+  at.  If "local", then jobs are run in-process as a single map
+  and reduce task.
+  </description>
+</property>
+
+# Do the same changes to core-site.xml and mapred-site.xml in the slave. Now, restart the daemons on the master node.
+
+# In the master node
+
+$ sudo -u hdfs hadoop fs -mkdir /tmp
+$ sudo -u hdfs hadoop fs -chmod -R 1777 /tmp
+
+
+$ sudo -u hdfs hadoop fs -mkdir /mapred/system
+$ sudo -u hdfs hadoop fs -chown mapred:hadoop /mapred/system
+
+#########################
+#### Start MapReduce ####
+#########################
+
+# To start MapReduce, start the TaskTracker and JobTracker services
+
+# On each TaskTracker system:
+
+$ sudo service hadoop-0.20-tasktracker start
+
+# On the JobTracker system:
+
+$ sudo service hadoop-0.20-jobtracker start
+
+############################################################
+#### Configure the Hadoop Daemons to Start at Boot Time ####
+############################################################
+
+To start the Hadoop daemons at boot time and on restarts, enable their init scripts on the systems on which the services will run, using the chkconfig tool.
+
+On the NameNode:
+
+$ sudo chkconfig hadoop-0.20-namenode on
+On the JobTracker:
+
+$ sudo chkconfig hadoop-0.20-jobtracker on
+On the Secondary NameNode:
+
+$ sudo chkconfig hadoop-0.20-secondarynamenode on
+On each TaskTracker:
+
+$ sudo chkconfig hadoop-0.20-tasktracker on
+On each DataNode:
+
+$ sudo chkconfig hadoop-0.20-datanode on
+
+Test your hadoop cluster using the command:
+
+$ sudo -u hdfs hadoop jar /usr/lib/hadoop/hadoop-*-examples.jar pi 2 100000
+
+You might have to turn the firewall off in the slave node:
+$ /etc/init.d/iptables stop
+

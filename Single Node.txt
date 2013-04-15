@@ -1,0 +1,105 @@
+#Make a directory in linuxto install the reference files(Linux)
+mkdir /home/hduser/Reference
+
+#File Transfer(Windows)
+pscp "D:\Flutura\Technical\CLOUDERA HADOOP HIVE SQOOP\Files to be transferred\hive-site.xml" hduser@172.16.63.157:/home/hduser/Reference
+pscp "D:\Flutura\Technical\CLOUDERA HADOOP HIVE SQOOP\Files to be transferred\mysql-connector-java-5.1.20-bin.jar" hduser@172.16.63.157:/home/hduser/Reference
+pscp "D:\Flutura\Technical\CLOUDERA HADOOP HIVE SQOOP\Files to be transferred\jdk-7u1-linux-i586.rpm" hduser@172.16.63.157:/home/hduser/Reference
+pscp "D:\Flutura\Technical\CLOUDERA HADOOP HIVE SQOOP\Files to be transferred\cdh3-repository-1.0-1.noarch.rpm" hduser@172.16.63.157:/home/hduser/Reference
+pscp -r "D:\Flutura\Technical\CLOUDERA HADOOP HIVE SQOOP\Files to be transferred" hduser@172.16.63.157:/home/hduser/Reference
+
+
+#Java Upgradation - Goto the the directory where the jdk rpm file is copied
+sudo rpm -Uvh jdk-7u1-linux-i586.rpm
+ln -s /usr/java/jdk1.7.0_01/bin/java /usr/bin/java
+
+#Add to Bashrc
+export PATH=$JAVA_HOME/bin:$PATH
+export JAVA_HOME=/usr/java/jdk1.7.0_01
+
+
+
+######################HADOOP INSTALLATION#############################################
+#Add the cloudera repositary by downloading the rpm from here -  http://archive.cloudera.com/redhat/cdh/cdh3-repository-1.0-1.noarch.rpm
+
+sudo yum --nogpgcheck localinstall cdh3-repository-1.0-1.noarch.rpm
+sudo yum install hadoop-0.20-conf-pseudo
+
+
+#Commands to check if hadoop is working properly
+
+#HADOOP VERIFICATION
+for service in /etc/init.d/hadoop-0.20-*; do sudo $service start; done
+hadoop fs -mkdir /foo
+hadoop fs -ls /
+hadoop fs -rmr /foo
+hadoop fs -ls /
+hadoop jar /usr/lib/hadoop/hadoop-*-examples.jar pi 2 100000
+
+
+
+#######################Hive Installation############################################################
+sudo yum install hadoop-hive
+mkdir Backup
+sudo cp /etc/hive/conf/hive-site.xml Backup/
+sudo cp mysql-connector-java-5.1.20-bin.jar /usr/lib/hive/lib/
+
+#Add the following in MySql
+
+mysql> CREATE DATABASE metastore;
+mysql> USE metastore;
+mysql> SOURCE /usr/lib/hive/scripts/metastore/upgrade/mysql/hive-schema-0.7.0.mysql.sql;
+
+mysql> CREATE USER 'hiveuser'@'%' IDENTIFIED BY 'password';                  #if '@''%' does not work then use '@''localhost'
+mysql> GRANT SELECT,INSERT,UPDATE,DELETE ON metastore.* TO 'hiveuser'@'%';
+mysql> REVOKE ALTER,CREATE ON metastore.* FROM 'hiveuser'@'%';
+
+
+
+
+#add or modify the following text to hive-site.xml
+######################################################
+<property>
+  <name>javax.jdo.option.ConnectionURL</name>
+  <value>jdbc:mysql://MYHOST/metastore</value>
+</property>
+ 
+<property>
+  <name>javax.jdo.option.ConnectionDriverName</name>
+  <value>com.mysql.jdbc.Driver</value>
+</property>
+ 
+<property>
+  <name>javax.jdo.option.ConnectionUserName</name>
+  <value>hiveuser</value>
+</property>
+ 
+<property>
+  <name>javax.jdo.option.ConnectionPassword</name>
+  <value>password</value>
+</property>
+ 
+<property>
+  <name>datanucleus.autoCreateSchema</name>
+  <value>false</value>
+</property>
+ 
+<property>
+  <name>datanucleus.fixedDatastore</name>
+  <value>true</value>
+</property>
+########################################################
+
+
+
+####################SQOOP INSTALLATION##################
+
+sudo yum install sqoop
+sudo cp mysql-connector-java-5.1.20-bin.jar /usr/lib/sqoop/lib/
+
+
+sudo sqoop import --connect jdbc:mysql://localhost/TESTDB --username root -password password --table TEST_TABLE --hive-table=TEST_TABLE --hive-import –create-hive-table --hive-overwrite
+
+
+
+
